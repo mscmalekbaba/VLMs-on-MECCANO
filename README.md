@@ -1,6 +1,6 @@
 # VLMs on MECCANO: from 3D-CNNs to vision-language models
 
-**Status: work in progress.** An exploratory study of how an open vision-language model (VLM) compares with small, compressed 3D-CNNs for fine-grained worker-activity recognition in industrial assembly. No results yet; the tables below are filled in as experiments finish.
+**Status: work in progress.** An exploratory study of how an open vision-language model (VLM) compares with small, compressed 3D-CNNs for fine-grained worker-activity recognition in industrial assembly. The zero-shot baseline is done (below); LoRA adaptation is next, and the remaining rows are filled in as experiments finish.
 
 Follows my earlier work on efficient video models for the same task:
 - PDNet (VISAPP 2026): https://github.com/mscmalekbaba/PDNet
@@ -32,7 +32,7 @@ To get soft labels from a text-generating model, each of the 61 classes gets a s
 
 - **Model:** Qwen2.5-VL-3B-Instruct (a newer small Qwen-VL model if it is a drop-in swap).
 - **Data:** MECCANO action recognition, 61 classes, same train/test split as PDNet. The dataset is not included; request access from the [dataset authors](https://github.com/fpv-iplab/MECCANO).
-- **Zero-shot protocol:** each clip is sampled to a fixed number of frames and the model is asked to choose one action from the fixed list of 61 classes. The answer is mapped to a class, and Top-1 accuracy is computed.
+- **Zero-shot protocol:** each clip is sampled to 16 frames (max 200,704 pixels per frame) and the model is asked to choose one action from the fixed list of 61 classes. The answer is mapped to a class (exact, contained or fuzzy match), and Top-1 accuracy is computed.
 - **Adaptation:** LoRA fine-tuning on 5-10% of the training clips.
 - **Metrics:** Top-1 and mean per-class accuracy, parameters, GPU memory, latency per clip.
 
@@ -40,20 +40,30 @@ To get soft labels from a text-generating model, each of the 61 classes gets a s
 
 | Model | Training | Top-1 (%) | Mean per-class (%) | Params (M) | Latency / clip |
 | --- | --- | --- | --- | --- | --- |
+| Majority class (`check_booklet`) | none | 27.34 | n/a | n/a | n/a |
+| Random guess | none | 1.64 | 1.64 | n/a | n/a |
 | X3D-M, pruned + KD (PDNet) | full train set | 39.46 | 10.95 | 1.80 | n/a |
-| Qwen2.5-VL-3B | zero-shot | TBD | TBD | ~3000 | TBD |
+| Qwen2.5-VL-3B | zero-shot, 16 frames | 5.28 | 3.23 | ~3000 | 2.6 s (T4, 7.9 GB peak) |
 | Qwen2.5-VL-3B | LoRA, few-shot | TBD | TBD | ~3000 | TBD |
 | Qwen2.5-VL-3B, 4-bit | LoRA, few-shot | TBD | TBD | ~3000 | TBD |
 | X3D-M student | distilled from VLM | TBD | TBD | 3.09 | TBD |
 
-PDNet numbers are from the thesis (Table 5.5). Latency is measured on different hardware, so compare orders of magnitude, not exact values.
+PDNet numbers are from the thesis (Table 5.5). Latency is measured on different hardware, so compare orders of magnitude, not exact values. The zero-shot run covers 2,820 of the 2,823 test clips (3 clips could not be processed); 6 answers could not be mapped to a class.
+
+### Zero-shot findings
+
+- Zero-shot Qwen2.5-VL-3B is well above random guessing (5.3% vs 1.6%) but far below always predicting the majority class (27.3%) and far below PDNet (39.5%).
+- The model collapses onto a few answers. Two "take ... bar" answers make up about 69% of all predictions (`take_red_angled_perforated_bar` 1441 of 2820, `take_red_perforated_junction_bar` 510). Most other classes are almost never predicted.
+- Likely causes (not yet tested): a strong prior toward the first object-like answer, and no way for the model to tell similar fine-grained actions apart from a first-person view. Checking whether the answer depends on the order of the class list is a planned control.
+- This is a legitimate baseline: it shows that adaptation, not prompting, is needed on this task.
 
 ## Plan
 
 Core (first):
-- [ ] Data loader: MECCANO clips to frames
-- [ ] Zero-shot evaluation script and prompt
-- [ ] Results table and error analysis (which classes fail)
+- [x] Data loader: MECCANO clips to frames
+- [x] Zero-shot evaluation script and prompt
+- [x] Zero-shot results table (full test split, 16 frames)
+- [ ] Error analysis (which classes fail) and prompt-order control
 - [ ] LoRA fine-tuning on a small subset
 - [ ] Efficiency measurements
 
